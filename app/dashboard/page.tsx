@@ -69,11 +69,11 @@ export default function DashboardPage() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-white to-white/40 bg-clip-text text-transparent italic uppercase">
+          <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/80 to-foreground/40 bg-clip-text text-transparent italic uppercase">
             Intelligence Pool
           </h1>
-          <p className="text-foreground/70 mt-2 font-medium flex items-center gap-2 italic">
-            <Activity className="h-4 w-4 text-primary animate-pulse" /> Monitoring {history.length} active heuristic nodes.
+          <p className="text-foreground/50 mt-2 font-medium flex items-center gap-2 italic uppercase tracking-widest text-[10px]">
+            <Activity className="h-3 w-3 text-primary animate-pulse" /> Autonomous heuristic network synchronized
           </p>
         </motion.div>
         
@@ -141,7 +141,7 @@ function StatCard({ icon: Icon, label, value, sub, color }: any) {
   return (
     <motion.div 
       whileHover={{ y: -5 }}
-      className="glass-card rounded-2xl p-6 border border-white/5 relative group overflow-hidden"
+      className="glass-card rounded-2xl p-6 border border-border bg-card/50 backdrop-blur-md relative group overflow-hidden"
     >
       <div className={`absolute top-0 right-0 w-24 h-24 bg-${color}/10 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
       <div className="flex items-center gap-4 mb-3">
@@ -166,9 +166,9 @@ function HistoryCard({ item, idx, onDelete }: any) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.5, delay: idx * 0.05 }}
-      className="glass-card rounded-2xl overflow-hidden neon-border group flex flex-col h-full bg-black/20"
+      className="glass-card rounded-2xl overflow-hidden border border-border group flex flex-col h-full bg-card/40 backdrop-blur-md"
     >
-      <div className="p-6 pb-4 border-b border-white/5 flex-1">
+      <div className="p-6 pb-4 border-b border-border flex-1">
         <div className="flex justify-between items-start mb-4">
           <div className="flex flex-col min-w-0">
              <div className="flex items-center gap-2 mb-1">
@@ -205,7 +205,7 @@ function HistoryCard({ item, idx, onDelete }: any) {
         </div>
       </div>
       
-      <div className="px-6 py-4 bg-white/2 flex items-center justify-between gap-3">
+      <div className="px-6 py-4 bg-foreground/5 flex items-center justify-between gap-3">
         <Link href={isPending ? '#' : `/dashboard/result/${item.id}`} className={`flex-1 ${isPending ? 'cursor-not-allowed opacity-40' : ''}`}>
           <Button 
             variant="ghost" 

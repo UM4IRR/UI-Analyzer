@@ -7,7 +7,8 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 const analyzeSchema = z.object({
-  urls: z.array(z.string().url()).min(1),
+  urls: z.array(z.string().url()).optional().default([]),
+  images: z.array(z.string()).optional().default([]),
 });
 
 export async function POST(req: Request) {
@@ -18,19 +19,16 @@ export async function POST(req: Request) {
     }
 
     const json = await req.json();
-    const { urls } = analyzeSchema.parse(json);
+    const { urls, images } = analyzeSchema.parse(json);
     // @ts-ignore
     const userId = session.user.id;
     const results = [];
 
+    // Process URLs
     for (const url of urls) {
-      // 1. Check Redis Cache
       const cachedId = await getCachedAnalysis(url);
       if (cachedId) {
-        const existing = await prisma.analysis.findUnique({
-          where: { id: cachedId }
-        });
-
+        const existing = await prisma.analysis.findUnique({ where: { id: cachedId } });
         if (existing) {
           if (existing.userId === userId) {
             results.push({ url, jobId: existing.id, status: "completed", cached: true });
@@ -51,30 +49,40 @@ export async function POST(req: Request) {
         }
       }
 
-      // 2. Pre-create record for better Dashboard UX
+      const analysisRecord = await prisma.analysis.create({
+        data: { userId, url, score: null }
+      });
+
+      await analysisQueue.add("analyze", { url, userId }, { jobId: analysisRecord.id });
+      results.push({ url, jobId: analysisRecord.id, status: "queued", cached: false });
+    }
+
+    // Process Pasted Images (Screenshots)
+    for (const imageData of images) {
       const analysisRecord = await prisma.analysis.create({
         data: {
           userId,
-          url,
-          score: null, // Indicates PENDING
+          url: "Visual Frame",
+          score: null,
+          imageUrl: imageData // Initial storage for immediate display in dashboard if needed
         }
       });
 
-      // 3. Enqueue Job with specific ID
-      await analysisQueue.add("analyze", {
-        url,
+      await analysisQueue.add("analyze", { 
+        url: "Visual Frame", 
         userId,
-      }, {
-        jobId: analysisRecord.id,
+        imageData 
+      }, { 
+        jobId: analysisRecord.id 
       });
 
-      results.push({ url, jobId: analysisRecord.id, status: "queued", cached: false });
+      results.push({ url: "Visual Frame", jobId: analysisRecord.id, status: "queued", cached: false });
     }
 
     return NextResponse.json({
       results,
       count: results.length,
-      message: `${results.length} intelligence scans synchronized.`
+      message: `${results.length} intelligence cycles synchronized.`
     });
   } catch (error) {
     console.error("Analysis API Error:", error);

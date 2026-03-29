@@ -50,12 +50,12 @@ export default function LoginPage() {
         transition={{ duration: 0.8, ease: "easeOut" }}
         className="w-full max-w-md relative z-10"
       >
-        <Card className="glass-card border-white/10 rounded-[2.5rem] shadow-3xl overflow-hidden">
+        <Card className="glass-card border-border bg-card/60 backdrop-blur-xl rounded-[2.5rem] shadow-3xl overflow-hidden">
           <CardHeader className="pt-12 px-10 text-center">
             <div className="mx-auto w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-6 glow-cyan animate-float">
                <Cpu className="h-7 w-7 text-primary" />
             </div>
-            <CardTitle className="text-3xl font-black tracking-tighter mb-2 italic bg-gradient-to-br from-white to-white/60 bg-clip-text text-transparent underline decoration-primary/30 underline-offset-8">
+            <CardTitle className="text-3xl font-black tracking-tighter mb-2 italic bg-gradient-to-br from-foreground to-foreground/60 bg-clip-text text-transparent underline decoration-primary/30 underline-offset-8">
               Welcome Back
             </CardTitle>
             <CardDescription className="text-muted-foreground text-sm font-medium mt-4">
@@ -76,7 +76,7 @@ export default function LoginPage() {
                       type="email"
                       placeholder="name@example.com"
                       required
-                      className="bg-black/40 border-white/5 h-14 pl-12 rounded-xl focus-visible:ring-primary/40 focus-visible:border-primary/50 transition-all font-medium"
+                      className="bg-foreground/5 border-border h-14 pl-12 rounded-xl focus-visible:ring-primary/40 focus-visible:border-primary/50 transition-all font-medium"
                     />
                   </div>
                 </div>
@@ -89,7 +89,7 @@ export default function LoginPage() {
                       name="password"
                       type="password"
                       required
-                      className="bg-black/40 border-white/5 h-14 pl-12 rounded-xl focus-visible:ring-primary/40 focus-visible:border-primary/50 transition-all font-medium"
+                      className="bg-foreground/5 border-border h-14 pl-12 rounded-xl focus-visible:ring-primary/40 focus-visible:border-primary/50 transition-all font-medium"
                     />
                   </div>
                 </div>
@@ -107,10 +107,10 @@ export default function LoginPage() {
 
             <div className="relative my-10">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/5"></div>
+                <div className="w-full border-t border-border"></div>
               </div>
               <div className="relative flex justify-center text-[10px] uppercase tracking-widest font-black">
-                <span className="bg-[#12141d] px-4 text-muted-foreground italic">Secure Access</span>
+                <span className="bg-background px-4 text-muted-foreground italic">Secure Access</span>
               </div>
             </div>
 
@@ -118,7 +118,7 @@ export default function LoginPage() {
               variant="outline"
               type="button"
               onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-              className="w-full h-14 border-white/5 bg-white/2 text-foreground/80 hover:bg-white/5 hover:border-white/10 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors text-xs tracking-wide"
+              className="w-full h-14 border-border bg-foreground/5 text-foreground/80 hover:bg-foreground/10 hover:border-primary/30 rounded-xl font-bold flex items-center justify-center gap-3 transition-colors text-xs tracking-wide"
             >
               <Globe className="h-4 w-4 text-primary" />
               Sign in with Google

@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from "framer-motion";
 export default function NewAnalysisPage() {
   const router = useRouter();
   const [inputText, setInputText] = useState("");
+  const [pastedImages, setPastedImages] = useState<string[]>([]);
   const [status, setStatus] = useState<"idle" | "submitting" | "tracking">("idle");
   const [detectedUrls, setDetectedUrls] = useState<string[]>([]);
   const [activeScans, setActiveScans] = useState<{ id: string, url: string, score: number | null, status: string }[]>([]);
@@ -27,6 +28,34 @@ export default function NewAnalysisPage() {
     });
     setDetectedUrls(uniqueUrls);
   }, [inputText]);
+
+  // Handle Screenshot Pasting
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    const imagePromises: Promise<string>[] = [];
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          const promise = new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              resolve(event.target?.result as string);
+            };
+            reader.readAsDataURL(file);
+          });
+          imagePromises.push(promise);
+        }
+      }
+    }
+
+    if (imagePromises.length > 0) {
+      const newImages = await Promise.all(imagePromises);
+      setPastedImages((prev) => [...prev, ...newImages]);
+      toast.success(`${newImages.length} Visual Frame(s) intercepted!`);
+    }
+  };
 
   // Polling logic for active scans
   useEffect(() => {
@@ -75,8 +104,8 @@ export default function NewAnalysisPage() {
 
   async function onSubmit(e: React.FormEvent) {
     if (e) e.preventDefault();
-    if (detectedUrls.length === 0) {
-      toast.error("No valid satellite coordinates detected.");
+    if (detectedUrls.length === 0 && pastedImages.length === 0) {
+      toast.error("No valid satellite coordinates or visual frames detected.");
       return;
     }
 
@@ -85,7 +114,10 @@ export default function NewAnalysisPage() {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ urls: detectedUrls }),
+        body: JSON.stringify({ 
+          urls: detectedUrls,
+          images: pastedImages 
+        }),
       });
 
       if (!res.ok) throw new Error("Failed to synchronize fleet");
@@ -94,7 +126,7 @@ export default function NewAnalysisPage() {
       const initialScans = data.results.map((r: any) => ({
         id: r.jobId,
         url: r.url,
-        score: r.status === "completed" ? 85 : null, // Initial hint if cached
+        score: r.status === "completed" ? 85 : null, 
         status: r.status === "completed" ? "synchronized" : "uplink_active"
       }));
 
@@ -114,7 +146,7 @@ export default function NewAnalysisPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
       >
-        <Card className="glass-card rounded-[2.5rem] border-white/10 shadow-3xl overflow-hidden relative">
+        <Card className="glass-card rounded-[2.5rem] border-border bg-card/60 backdrop-blur-xl shadow-3xl overflow-hidden relative">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
           
           <CardHeader className="pt-16 px-12 pb-10 text-center">
@@ -146,38 +178,82 @@ export default function NewAnalysisPage() {
                   <div className="space-y-5">
                     <div className="flex justify-between items-end px-4">
                       <Label htmlFor="urls" className="text-[11px] uppercase tracking-[0.4em] font-black text-foreground/40 group-focus-within:text-primary transition-colors">Target Coordinate Registry</Label>
-                      {detectedUrls.length > 0 && (
-                        <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 text-primary font-black text-[10px] uppercase tracking-widest bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
-                          <CheckCircle2 className="h-3 w-3" />
-                          {detectedUrls.length} Detected
-                        </motion.div>
-                      )}
+                      <div className="flex gap-3">
+                        {pastedImages.length > 0 && (
+                          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 text-accent font-black text-[10px] uppercase tracking-widest bg-accent/10 px-3 py-1 rounded-full border border-accent/20">
+                            <Sparkles className="h-3 w-3" />
+                            Visual Frames Intercepted
+                            <button onClick={() => setPastedImages([])} className="ml-1 hover:text-white transition-colors">×</button>
+                          </motion.div>
+                        )}
+                        {detectedUrls.length > 0 && (
+                          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 text-primary font-black text-[10px] uppercase tracking-widest bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Target Coordinates Locked
+                          </motion.div>
+                        )}
+                      </div>
                     </div>
-                    <div className="relative group">
-                      <Textarea
-                        id="urls"
-                        placeholder="Paste links, markdown, or raw text here..."
-                        required
-                        value={inputText}
-                        onChange={(e) => setInputText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            onSubmit(e as any);
-                          }
-                        }}
-                        className="bg-black/40 border-white/5 text-lg min-h-[120px] p-8 rounded-3xl focus-visible:ring-primary/40 focus-visible:border-primary/50 transition-all font-medium leading-relaxed resize-none placeholder:text-foreground/20"
-                      />
+                    <div className="relative group/container">
+                      <div className="flex flex-col bg-foreground/5 border-border rounded-[2.5rem] overflow-hidden focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 transition-all border shadow-2xl backdrop-blur-md">
+                        <AnimatePresence>
+                          {pastedImages.length > 0 && (
+                            <motion.div 
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="w-full"
+                            >
+                              <div className="flex flex-nowrap gap-4 p-5 pb-2 overflow-x-auto no-scrollbar">
+                                {pastedImages.map((img, idx) => (
+                                  <motion.div 
+                                    key={idx}
+                                    initial={{ scale: 0.8, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    whileHover={{ scale: 1.05 }}
+                                    className="relative h-28 w-28 flex-shrink-0 rounded-2xl overflow-hidden border border-white/20 shadow-xl group/img"
+                                  >
+                                    <img src={img} alt="Pasted frame" className="h-full w-full object-cover" />
+                                    <button 
+                                      onClick={() => setPastedImages(prev => prev.filter((_, i) => i !== idx))}
+                                      className="absolute top-2 right-2 h-6 w-6 rounded-full bg-black/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity hover:bg-red-500 shadow-lg"
+                                    >
+                                      <ListPlus className="h-3 w-3 rotate-45" />
+                                    </button>
+                                  </motion.div>
+                                ))}
+                                {pastedImages.length > 0 && <div className="w-1 flex-shrink-0" />} {/* Spacer for scroll end */}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                        
+                        <Textarea
+                          id="urls"
+                          placeholder="Paste links OR screenshots (Ctrl+V) here..."
+                          required={detectedUrls.length === 0 && pastedImages.length === 0}
+                          value={inputText}
+                          onChange={(e) => setInputText(e.target.value)}
+                          onPaste={handlePaste}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              onSubmit(e as any);
+                            }
+                          }}
+                          className="bg-transparent border-none text-xl min-h-[140px] px-8 py-6 focus-visible:ring-0 transition-all font-medium leading-[1.6] resize-none placeholder:text-foreground/10"
+                        />
+                      </div>
                     </div>
                   </div>
                   
                   <Button 
                     type="submit" 
                     size="lg" 
-                    disabled={detectedUrls.length === 0 || status === "submitting"}
+                    disabled={(detectedUrls.length === 0 && pastedImages.length === 0) || status === "submitting"}
                     className="w-full h-20 rounded-3xl bg-primary hover:glow-cyan text-white font-black text-xl tracking-tight transition-all duration-300 active:scale-[0.98] group disabled:opacity-30"
                   >
-                    {status === "submitting" ? "SYNCHRONIZING..." : detectedUrls.length > 0 ? `DEPLOY ${detectedUrls.length} SCANS` : "AWAITING COORDINATES"}
+                    {status === "submitting" ? "SYNCHRONIZING..." : (detectedUrls.length + pastedImages.length) > 0 ? "INITIATE FULL ANALYSIS" : "AWAITING COORDINATES"}
                     <Search className="ml-4 h-6 w-6 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </motion.form>
@@ -190,13 +266,15 @@ export default function NewAnalysisPage() {
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {activeScans.map((scan) => (
-                      <div key={scan.id} className="bg-white/5 border border-white/10 rounded-2xl p-6 flex items-center justify-between group hover:bg-white/10 transition-all">
+                      <div key={scan.id} className="bg-card border border-border rounded-2xl p-6 flex items-center justify-between group hover:bg-foreground/5 transition-all">
                         <div className="flex flex-col gap-1 overflow-hidden">
                           <span className="text-[9px] uppercase tracking-[0.3em] font-black text-foreground/30 flex items-center gap-2">
                              {scan.score === null ? <Zap className="h-2.5 w-2.5 text-primary animate-pulse" /> : <ShieldCheck className="h-2.5 w-2.5 text-primary" />}
                              {scan.status.replace("_", " ")}
                           </span>
-                          <span className="text-sm font-bold truncate text-foreground/80">{new URL(scan.url).hostname}</span>
+                          <span className="text-sm font-bold truncate text-foreground/80">
+                            {scan.url === "Visual Frame" ? "Visual Frame (Screenshot)" : new URL(scan.url).hostname}
+                          </span>
                         </div>
                         
                         <div className="flex items-center gap-4">
@@ -232,7 +310,7 @@ export default function NewAnalysisPage() {
                           </div>
                           
                           {/* Progress Bar Container */}
-                          <div className="w-full bg-white/5 rounded-full h-3 border border-white/5 relative overflow-hidden shadow-inner">
+                          <div className="w-full bg-foreground/5 rounded-full h-3 border border-border relative overflow-hidden shadow-inner">
                              <motion.div 
                                 initial={{ width: 0 }}
                                 animate={{ width: `${(activeScans.filter(s => s.score !== null).length / activeScans.length) * 100}%` }}

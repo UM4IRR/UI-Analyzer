@@ -13,20 +13,40 @@ console.log("Starting Analysis Background Worker...");
 export const analysisWorker = new Worker(
   "analysis-queue",
   async (job: Job) => {
-    const { url, userId } = job.data;
-    console.log(`Processing job ${job.id} for URL: ${url}`);
+    const { url, userId, imageData } = job.data;
+    console.log(`Processing job ${job.id} for ${url === "Visual Frame" ? "Screenshot Frame" : `URL: ${url}`}`);
 
     try {
-      // 1. Capture Screenshot
-      console.log(`[Job ${job.id}] Capturing screenshot...`);
-      const { screenshot, metadata } = await captureScreenshot(url);
+      let screenshotBuffer: Buffer;
+      let analysisMetadata: any;
 
-      // 2. Mock: Upload to Supabase Storage
-      const base64Image = `data:image/jpeg;base64,${screenshot.toString("base64")}`;
+      if (imageData) {
+        // 1a. Use Pasted Image Buffer (Vision Path)
+        console.log(`[Job ${job.id}] Vision path detected. Decoding frame...`);
+        screenshotBuffer = Buffer.from(imageData.split(",")[1], "base64");
+        
+        // Mock metrics for Vision analysis (since we can't crawl DOM on a static image)
+        analysisMetadata = {
+          buttonCount: 5,
+          imageCount: 3,
+          linkCount: 12,
+          hasAltTags: true,
+          loadTime: 450, // Rapid local handoff
+        };
+      } else {
+        // 1b. Capture Screenshot (Crawler Path)
+        console.log(`[Job ${job.id}] Crawler path detected. Capturing screenshot...`);
+        const { screenshot, metadata } = await captureScreenshot(url);
+        screenshotBuffer = screenshot;
+        analysisMetadata = metadata;
+      }
+
+      // 2. Prepare Display Image
+      const base64Image = imageData || `data:image/jpeg;base64,${screenshotBuffer.toString("base64")}`;
 
       // 3. Analyze UX
       console.log(`[Job ${job.id}] Running heuristics analysis...`);
-      const { score, issues } = await analyzeUX(metadata, url);
+      const { score, issues } = await analyzeUX(analysisMetadata, url === "Visual Frame" ? "https://vision.uxflow.ai" : url);
 
       // 4. Save to Database
       console.log(`[Job ${job.id}] Saving results to DB...`);
@@ -40,7 +60,7 @@ export const analysisWorker = new Worker(
         create: {
           id: job.id,
           userId,
-          url,
+          url: url || "Visual Frame",
           score: score || 0,
           results: issues as any,
           imageUrl: base64Image,
@@ -52,20 +72,19 @@ export const analysisWorker = new Worker(
     } catch (error: any) {
       console.error(`[Job ${job.id}] Failed:`, error.message);
       
-      // Attempt to save failed state to database
       try {
         await prisma.analysis.upsert({
           where: { id: job.id },
           update: {
             score: 0,
-            results: [{ title: "Error", description: error.message, severity: "high", suggestion: "Try again" }] as any,
+            results: [{ title: "Intelligence Failure", description: error.message, severity: "high", suggestion: "Confirm network stability or frame format." }] as any,
           },
           create: {
             id: job.id,
             userId,
-            url,
+            url: url || "Visual Frame",
             score: 0,
-            results: [{ title: "Error", description: error.message, severity: "high", suggestion: "Try again" }] as any,
+            results: [{ title: "Intelligence Failure", description: error.message, severity: "high", suggestion: "Confirm network stability or frame format." }] as any,
           },
         });
       } catch (dbError) {
@@ -77,7 +96,7 @@ export const analysisWorker = new Worker(
   },
   {
     connection: redis,
-    concurrency: 2, // Limit concurrent Puppeteer instances
+    concurrency: 2,
   }
 );
 
