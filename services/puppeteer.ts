@@ -1,4 +1,5 @@
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
 
 export interface CaptureResult {
   screenshot: Buffer;
@@ -14,13 +15,15 @@ export interface CaptureResult {
 
 export async function captureScreenshot(url: string): Promise<CaptureResult> {
   const startTime = Date.now();
+  
+  const isDev = process.env.NODE_ENV === "development";
   const browser = await puppeteer.launch({
-    headless: true,
-    args: [
-      "--no-sandbox", 
-      "--disable-setuid-sandbox",
-      "--disable-blink-features=AutomationControlled", // Bypass automated-browser flags
-    ],
+    args: isDev ? ["--no-sandbox"] : chromium.args,
+    defaultViewport: isDev ? { width: 1280, height: 1080 } : (chromium as any).defaultViewport,
+    executablePath: isDev 
+      ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" // Local path for Windows dev
+      : await chromium.executablePath(),
+    headless: isDev ? true : (chromium as any).headless,
   });
 
   try {
@@ -35,14 +38,7 @@ export async function captureScreenshot(url: string): Promise<CaptureResult> {
     });
 
     await page.setViewport({ width: 1280, height: 1080 });
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
-    
-    // Wait for body to ensure layout is initialized
-    try {
-      await page.waitForSelector('body', { timeout: 10000 });
-    } catch (e) {
-      console.warn("Body selector timeout, proceeding with current layout state.");
-    }
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 8000 }); // Strict timeout for serverless
     
     // Extract metadata
     const metadata = await page.evaluate(() => {
@@ -61,39 +57,15 @@ export async function captureScreenshot(url: string): Promise<CaptureResult> {
     });
 
     let screenshot: Buffer;
-    try {
-      // Manually calculate content height to avoid 0-width protocol errors in fullPage mode
-      const scrollHeight = await page.evaluate(() => {
-        return Math.max(
-          document.body.scrollHeight,
-          document.documentElement.scrollHeight,
-          document.body.offsetHeight,
-          document.documentElement.offsetHeight,
-          document.body.clientHeight,
-          document.documentElement.clientHeight,
-          2000 // Ensure a minimum height for analysis
-        );
-      });
-
-      // Force a valid width and calculated height
-      await page.setViewport({ width: 1280, height: Math.min(scrollHeight, 10000) }); // Cap at 10k to prevent resource crash
-      
-      const screenshotResult = await page.screenshot({ 
-        type: "jpeg", 
-        quality: 80,
-        fullPage: false // We use our manual viewport sizing instead
-      });
-      screenshot = screenshotResult as Buffer;
-    } catch (error) {
-      console.error("Advanced manual capture failed, falling back to basic viewport:", error);
-      // Ensure we have a valid viewport for the fallback
-      await page.setViewport({ width: 1280, height: 1080 });
-      const screenshotResult = await page.screenshot({ type: "jpeg", quality: 80, fullPage: false });
-      screenshot = screenshotResult as Buffer;
-    }
+    const screenshotResult = await page.screenshot({ 
+      type: "jpeg", 
+      quality: 80,
+      fullPage: false 
+    });
+    screenshot = Buffer.from(screenshotResult);
     
     return {
-      screenshot: screenshot as Buffer,
+      screenshot,
       metadata: {
         ...metadata,
         loadTime: Date.now() - startTime
@@ -105,30 +77,24 @@ export async function captureScreenshot(url: string): Promise<CaptureResult> {
 }
 
 export async function generatePDF(html: string): Promise<Buffer> {
+  const isDev = process.env.NODE_ENV === "development";
   const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--font-render-hinting=none"],
+    args: isDev ? ["--no-sandbox"] : [...chromium.args, "--font-render-hinting=none"],
+    defaultViewport: isDev ? { width: 1280, height: 1080 } : (chromium as any).defaultViewport,
+    executablePath: isDev 
+      ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+      : await chromium.executablePath(),
+    headless: isDev ? true : (chromium as any).headless,
   });
 
   try {
     const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "networkidle0", timeout: 15000 });
     
-    // Set content and wait for network/styles to load completely
-    await page.setContent(html, { waitUntil: "networkidle0", timeout: 30000 });
-    
-    // Optional: wait a moment for complex CSS to map down (Tailwind via CDN usually is instant at networkidle0)
-    await new Promise(r => setTimeout(r, 500));
-
-    // Generate PDF with minimal margins to match the UI perfectly
     const pdfBuffer = await page.pdf({
       format: "A4",
-      printBackground: true, // Must enforce backgrounds for dark mode UI
-      margin: {
-        top: '20px',
-        bottom: '20px',
-        left: '20px',
-        right: '20px'
-      }
+      printBackground: true,
+      margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
     });
 
     return Buffer.from(pdfBuffer);

@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+.vscode
+.env
+Dockerfile
+.dockerignore
+package-lock.json
+public
+app
+components

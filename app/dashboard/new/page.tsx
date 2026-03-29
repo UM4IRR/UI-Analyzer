@@ -105,34 +105,51 @@ export default function NewAnalysisPage() {
   async function onSubmit(e: React.FormEvent) {
     if (e) e.preventDefault();
     if (detectedUrls.length === 0 && pastedImages.length === 0) {
-      toast.error("No valid satellite coordinates or visual frames detected.");
+      const msg = "No valid satellite coordinates or visual frames detected.";
+      toast.error(msg);
       return;
     }
 
     setStatus("submitting");
+    const allResults: any[] = [];
+    
     try {
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          urls: detectedUrls,
-          images: pastedImages 
-        }),
+      // 1. Process URLs individually for atomic serverless execution
+      const urlPromises = detectedUrls.map(async (url) => {
+        const res = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ urls: [url] }),
+        });
+        if (!res.ok) return { url, status: "failed" };
+        const data = await res.json();
+        return data.results[0];
       });
 
-      if (!res.ok) throw new Error("Failed to synchronize fleet");
-      const data = await res.json();
+      // 2. Process Images individually
+      const imgPromises = pastedImages.map(async (img) => {
+        const res = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ images: [img] }),
+        });
+        if (!res.ok) return { url: "Visual Frame", status: "failed" };
+        const data = await res.json();
+        return data.results[0];
+      });
+
+      const results = await Promise.all([...urlPromises, ...imgPromises]);
       
-      const initialScans = data.results.map((r: any) => ({
-        id: r.jobId,
+      const initialScans = results.map((r: any) => ({
+        id: r.jobId || `fail-${Math.random()}`,
         url: r.url,
-        score: r.status === "completed" ? 85 : null, 
-        status: r.status === "completed" ? "synchronized" : "uplink_active"
+        score: r.status === "completed" ? r.score : 0, 
+        status: r.status === "completed" ? "synchronized" : "uplink_failed"
       }));
 
       setActiveScans(initialScans);
       setStatus("tracking");
-      toast.success(`${data.count} intelligence cycles initiated!`);
+      toast.success(`${results.length} intelligence cycles initiated!`);
     } catch (err) {
       setStatus("idle");
       toast.error("Fleet synchronization failure.");
